@@ -164,3 +164,78 @@ Selection criteria (from the project brief): hardware compatibility, performance
 | Option | Pros | Cons |
 |---|---|---|
 | LLM API (cloud) |
+
+---
+
+## Part C: Navigation, SLAM and Sensors
+
+### C1. SLAM (Simultaneous Localization and Mapping)
+
+**What it is:** The robot builds a map of an unknown space while tracking its own position inside that map.
+
+| Option | Type | Notes |
+|---|---|---|
+| SLAM Toolbox | 2D LiDAR SLAM | Standard choice with ROS 2 and Nav2. Easy to set up, works well in simulation. |
+| Cartographer | 2D/3D LiDAR SLAM | Accurate, but more complex to configure. |
+| RTAB-Map | Visual / RGB-D SLAM | Uses camera or depth camera. Heavier on CPU. |
+| ORB-SLAM3 | Visual SLAM | Camera-only, strong research tool, harder to integrate. |
+
+**Decision:** Use SLAM Toolbox with a simulated 2D LiDAR for the prototype. Evaluate visual SLAM later if a LiDAR is not available on real hardware.
+
+### C2. Autonomous Navigation (Nav2)
+
+**What it is:** Nav2 is the standard ROS 2 navigation framework. It provides path planning, obstacle avoidance, recovery behaviors and map-based localization.
+
+**Why it fits:**
+- Covers autonomous navigation, movement planning, obstacle avoidance and recovery from the brief.
+- Works with SLAM Toolbox and Gazebo out of the box.
+- Supports restricted zones through "keepout" maps, which matches the requirement for restricted movement zones.
+- Recovery behaviors (back up, spin, clear costmap) support autonomous recovery.
+
+**Decision:** Use Nav2 as the navigation layer. The AI planner only sends goals such as "go to the kitchen" (a map position). Nav2 handles the actual path and obstacle avoidance.
+
+### C3. Sensors and Sensor Fusion
+
+| Sensor | Purpose | Typical hardware example |
+|---|---|---|
+| Ultrasonic | Short-range obstacle distance | HC-SR04 |
+| LiDAR | 2D/3D mapping, obstacle detection | RPLIDAR A1 (budget 2D) |
+| Infrared | Edge/cliff detection, close proximity | IR distance modules |
+| Camera | Vision, object detection | USB camera, Raspberry Pi camera |
+| Temperature | Hardware and environment monitoring | DHT22, DS18B20 |
+| Pressure | Touch or grip feedback, environment | FSR, BMP280 |
+| Motion | Presence detection | PIR sensor |
+| Gyroscope and accelerometer (IMU) | Orientation and movement | MPU6050 and similar |
+| GPS | Outdoor location | u-blox modules |
+
+**Sensor fusion approach:**
+- Combine wheel odometry and IMU with an Extended Kalman Filter (the `robot_localization` package in ROS 2) for a stable position estimate.
+- Combine LiDAR, ultrasonic and camera detections into one obstacle picture (costmap) used by navigation and the safety layer.
+- GPS is only useful outdoors, so it is optional for the indoor prototype.
+
+**Hardware bridge:** Microcontrollers (Arduino, ESP32) read the sensors and drive the motors. They connect to ROS 2 through micro-ROS or a serial bridge. A **hardware-level emergency stop and limit check should live on the microcontroller**, so safety still works even if the main computer or AI fails.
+
+**Decision:** Simulate LiDAR, camera, IMU and ultrasonic in Gazebo first. Treat real sensor hardware as a Phase 4 task.
+
+### C4. Other Capabilities (research notes)
+
+- **Object manipulation:** MoveIt 2 is the standard ROS 2 framework for robotic arm motion planning. Vision (YOLO) finds the object, and MoveIt plans the arm movement. A later-phase item.
+- **Multi-robot coordination:** ROS 2 namespaces for robots on the same network, plus MQTT for communication with a central server. Nav2 and fleet-management tools can be explored later.
+- **Predictive intelligence:** Start with simple methods: predict collisions from tracked obstacle velocity, and watch battery, temperature and motor-current trends for early warnings.
+- **Adaptive learning:** Controlled feedback only: store human ratings or corrections of task results, and use them to improve prompts, rules or settings. No uncontrolled self-modification of safety behavior.
+
+### Part C Summary
+
+| Technology | Role | Decision |
+|---|---|---|
+| SLAM Toolbox | Mapping and localization | Use (2D LiDAR) |
+| Nav2 | Path planning and obstacle avoidance | Use |
+| robot_localization (EKF) | Sensor fusion | Use |
+| micro-ROS / serial bridge | Connect microcontrollers to ROS 2 | Use in hardware phase |
+| MoveIt 2 | Robotic arm planning | Later phase |
+
+---
+
+## Overall Research Conclusion
+
+The recommended stack is ROS 2 and Gazebo (with Nav2 and SLAM Toolbox) for the robot and simulation, OpenCV and YOLO on PyTorch for vision, Whisper for speech, a swappable LLM planner, and MQTT with TLS for dashboard and multi-robot links. A separate safety layer sits between the AI planner and every hardware command. Full details are in `tech-stack.md` and `architecture.md`.
